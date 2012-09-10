@@ -116,6 +116,7 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/nice
 %{_bindir}/od
 %{_bindir}/printenv
+%{_bindir}/seq
 %{_bindir}/sort
 %{_bindir}/stat
 %{_bindir}/tac
