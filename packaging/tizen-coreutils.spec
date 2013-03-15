@@ -12,6 +12,7 @@ Source0:	ftp://ftp.gnu.org/gnu/%{name}/coreutils-%{version}.tar.bz2
 Source1:	mktemp-1.5.tar.gz
 Source1001:	%{name}.manifest
 Patch1:		coreutils-futimens.patch
+Patch2:		coreutils-6.9-smack.patch
 
 Patch1001:	mktemp-1.5-build.patch
 BuildRequires:	autoconf >= 2.58
@@ -29,6 +30,7 @@ the old GNU fileutils, sh-utils, and textutils packages.
 %prep
 %setup -q -b 1 -n coreutils-%{version}
 %patch1 -p1 -b .futimens
+%patch2 -p1 -b .smack
 
 %build
 cp %{SOURCE1001} .

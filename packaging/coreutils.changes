@@ -1,3 +1,6 @@
+* Tue Dec 11 2012 Elena Reshetova <elena.reshetova@intel.com> - 6.9
+- Bringing smack support back
+
 * Sun May 22 2011 Anas Nashif <anas.nashif@intel.com> - 6.9
 - Split docs and translations
 
