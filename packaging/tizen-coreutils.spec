@@ -88,6 +88,10 @@ do
 	done;
 done
 
+# license
+mkdir -p %{buildroot}/usr/share/license
+cp LICENSE %{buildroot}/usr/share/license/%{name}
+
 %clean
 rm -rf $RPM_BUILD_ROOT
 
@@ -148,3 +152,4 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/who
 %{_bindir}/whoami
 %{_sbindir}/chroot
+/usr/share/license/%{name}
