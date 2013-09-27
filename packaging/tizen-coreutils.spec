@@ -90,7 +90,7 @@ done
 
 # license
 mkdir -p %{buildroot}/usr/share/license
-cp LICENSE %{buildroot}/usr/share/license/%{name}
+cp COPYING %{buildroot}/usr/share/license/%{name}
 
 %clean
 rm -rf $RPM_BUILD_ROOT
