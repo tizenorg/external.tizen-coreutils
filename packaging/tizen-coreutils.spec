@@ -148,4 +148,3 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/who
 %{_bindir}/whoami
 %{_sbindir}/chroot
-
