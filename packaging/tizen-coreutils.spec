@@ -13,6 +13,7 @@ Source1:	mktemp-1.5.tar.gz
 Source1001:	%{name}.manifest
 Patch1:		coreutils-futimens.patch
 Patch2:		coreutils-6.9-smack.patch
+Patch3:		coreutils-autotools.patch
 
 Patch1001:	mktemp-1.5-build.patch
 BuildRequires:	autoconf >= 2.58
@@ -31,6 +32,7 @@ the old GNU fileutils, sh-utils, and textutils packages.
 %setup -q -b 1 -n coreutils-%{version}
 %patch1 -p1 -b .futimens
 %patch2 -p1 -b .smack
+%patch3 -p1 -b .autotools
 
 %build
 cp %{SOURCE1001} .
@@ -40,6 +42,7 @@ patch -p1 < %{PATCH1001}
 make
 popd
 
+autoreconf --install --force
 %configure
 make
 
