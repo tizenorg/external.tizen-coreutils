@@ -1,46 +1,54 @@
+diff -Nuarp tizen-coreutils/m4/lib-check.m4 tizen-coreutils-smack/m4/lib-check.m4
+--- tizen-coreutils/m4/lib-check.m4	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/m4/lib-check.m4	2015-05-20 16:16:27.000000000 +0200
+@@ -58,4 +58,8 @@ $ac_includes_default
+ 		  LIB_CRYPT="$ac_cv_search_crypt"])
+   LIBS="$cu_saved_libs"
+   AC_SUBST(LIB_CRYPT)
++
++  AC_CHECK_HEADERS(sys/smack.h, [], exit 1)
++  AC_CHECK_LIB(smack, smack_new_label_from_file, LIB_SMACK="-lsmack", exit 1)
++  AC_SUBST(LIB_SMACK)
+ ])
 diff -Nuarp tizen-coreutils/src/copy.c tizen-coreutils-smack/src/copy.c
---- tizen-coreutils/src/copy.c	2012-11-30 11:18:57.473521424 +0200
-+++ tizen-coreutils-smack/src/copy.c	2012-11-30 11:26:01.601502515 +0200
-@@ -53,6 +53,7 @@
- #include "utimens.h"
- #include "xreadlink.h"
- #include "yesno.h"
-+#include "smack.h"
+--- tizen-coreutils/src/copy.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/copy.c	2015-05-20 16:16:27.000000000 +0200
+@@ -20,6 +20,8 @@
+ #include <config.h>
+ #include <stdio.h>
+ #include <assert.h>
++#include <linux/xattr.h>
++#include <sys/smack.h>
+ #include <sys/types.h>
  
- #ifndef HAVE_FCHOWN
- # define HAVE_FCHOWN false
-@@ -570,6 +574,28 @@ copy_reg (char const *src_name, char con
+ #if HAVE_HURD_H
+@@ -570,6 +572,23 @@ copy_reg (char const *src_name, char con
  	}
      }
  
 +  if (x->preserve_context)
 +    {
-+      char src_context[SMACK_LABELLEN];
-+      char dst_context[SMACK_LABELLEN];
++      char *ctx = NULL;
 +
-+      if (smack_of_fd (source_desc, src_context, SMACK_LABELLEN) < 0)
++      if (smack_new_label_from_file (source_desc, XATTR_NAME_SMACK, &ctx) < 0)
 +        {
 +          if (x->require_preserve)
 +            ; //fail silently now // return_val = false;
 +        }
-+      else if (smack_of_fd (dest_desc, dst_context, SMACK_LABELLEN) < 0)
++      else if (smack_set_label_for_file (dest_desc, XATTR_NAME_SMACK, ctx) < 0)
 +        {
 +          if (x->require_preserve)
 +            ; //fail silently now // return_val = false;
 +        }
-+      else if (strcmp(src_context, dst_context))
-+        {
-+          if (smack_to_fd(dest_desc, src_context) < 0 && x->require_preserve)
-+            ; //fail silently now // return_val = false;
-+        }
++      free(ctx);
 +    }
 +
  close_src_and_dst_desc:
    if (close (dest_desc) < 0)
      {
 diff -Nuarp tizen-coreutils/src/copy.h tizen-coreutils-smack/src/copy.h
---- tizen-coreutils/src/copy.h	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/copy.h	2012-11-30 11:20:39.837516860 +0200
+--- tizen-coreutils/src/copy.h	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/copy.h	2015-05-20 16:16:27.000000000 +0200
 @@ -128,6 +128,10 @@ struct cp_options
    bool preserve_mode;
    bool preserve_timestamps;
@@ -53,17 +61,18 @@ diff -Nuarp tizen-coreutils/src/copy.h tizen-coreutils-smack/src/copy.h
       If true, attempt to preserve in the destination files any
       logical hard links between the source files.  If used with cp's
 diff -Nuarp tizen-coreutils/src/cp.c tizen-coreutils-smack/src/cp.c
---- tizen-coreutils/src/cp.c	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/cp.c	2012-11-30 11:20:39.837516860 +0200
-@@ -35,6 +35,7 @@
- #include "stat-time.h"
- #include "utimens.h"
- #include "acl.h"
-+#include "smack.h"
+--- tizen-coreutils/src/cp.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/cp.c	2015-05-20 16:16:27.000000000 +0200
+@@ -19,6 +19,8 @@
  
- #define ASSIGN_BASENAME_STRDUPA(Dest, File_name)	\
-   do							\
-@@ -191,7 +192,7 @@ Mandatory arguments to long options are
+ #include <config.h>
+ #include <stdio.h>
++#include <linux/xattr.h>
++#include <sys/smack.h>
+ #include <sys/types.h>
+ #include <getopt.h>
+ 
+@@ -191,7 +193,7 @@ Mandatory arguments to long options are
    -p                           same as --preserve=mode,ownership,timestamps\n\
        --preserve[=ATTR_LIST]   preserve the specified attributes (default:\n\
                                   mode,ownership,timestamps), if possible\n\
@@ -72,29 +81,28 @@ diff -Nuarp tizen-coreutils/src/cp.c tizen-coreutils-smack/src/cp.c
  "), stdout);
        fputs (_("\
        --no-preserve=ATTR_LIST  don't preserve the specified attributes\n\
-@@ -317,6 +318,27 @@ re_protect (char const *const_dst_name,
+@@ -317,6 +319,26 @@ re_protect (char const *const_dst_name,
  	    }
  	}
  
 +      if (x->preserve_context)
 +        {
-+          char src_context[SMACK_LABELLEN];
-+          char dst_context[SMACK_LABELLEN];
++          char *ctx = NULL;
 +
-+          if (smack_of_file (src_name, src_context, SMACK_LABELLEN) < 0 ||
-+              smack_of_file (dst_name, dst_context, SMACK_LABELLEN) < 0)
++          if (smack_new_label_from_file (src_name, XATTR_NAME_SMACK, &ctx) < 0)
 +            {
 +	      ; //error (0, errno, _("failed to preserve context for %s"),
 +		//     quote (dst_name));
 +	      //return false;
 +            }
-+          if (strcmp (src_context, dst_context) &&
-+              smack_to_file (dst_name, src_context) < 0)
++          if (smack_set_label_for_file (dst_name, XATTR_NAME_SMACK, ctx) < 0)
 +            {
 +	      ; //error (0, errno, _("failed to preserve context for %s"),
 +		//     quote (dst_name));
++        //free(ctx);
 +	      //return false;
 +            }
++          free(ctx);
 +        }
 +
        if (x->preserve_ownership)
@@ -157,16 +165,16 @@ diff -Nuarp tizen-coreutils/src/cp.c tizen-coreutils-smack/src/cp.c
  	  x.recursive = true;
  	  break;
 diff -Nuarp tizen-coreutils/src/id.c tizen-coreutils-smack/src/id.c
---- tizen-coreutils/src/id.c	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/id.c	2012-11-30 11:20:39.837516860 +0200
-@@ -29,6 +29,7 @@
- #include "system.h"
- #include "error.h"
- #include "quote.h"
-+#include "smack.h"
- 
- /* The official name of this program (e.g., no `g' prefix).  */
- #define PROGRAM_NAME "id"
+--- tizen-coreutils/src/id.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/id.c	2015-05-20 16:16:27.000000000 +0200
+@@ -21,6 +21,7 @@
+ #include <config.h>
+ #include <stdio.h>
+ #include <getopt.h>
++#include <sys/smack.h>
+ #include <sys/types.h>
+ #include <pwd.h>
+ #include <grp.h>
 @@ -40,6 +41,7 @@ int getugroups ();
  static void print_user (uid_t uid);
  static void print_group (gid_t gid);
@@ -175,15 +183,7 @@ diff -Nuarp tizen-coreutils/src/id.c tizen-coreutils-smack/src/id.c
  static void print_full_info (const char *username);
  
  /* The name this program was run with. */
-@@ -52,11 +54,15 @@ static bool use_name = false;
- static uid_t ruid, euid;
- static gid_t rgid, egid;
- 
-+/* The security "context" to print. */
-+static char context[SMACK_LABELLEN];
-+
- /* True unless errors have been encountered.  */
- static bool ok = true;
+@@ -57,6 +59,7 @@ static bool ok = true;
  
  static struct option const longopts[] =
  {
@@ -191,7 +191,7 @@ diff -Nuarp tizen-coreutils/src/id.c tizen-coreutils-smack/src/id.c
    {"group", no_argument, NULL, 'g'},
    {"groups", no_argument, NULL, 'G'},
    {"name", no_argument, NULL, 'n'},
-@@ -80,6 +86,7 @@ usage (int status)
+@@ -80,6 +83,7 @@ usage (int status)
  Print information for USERNAME, or the current user.\n\
  \n\
    -a              ignore, for compatibility with other versions\n\
@@ -199,7 +199,7 @@ diff -Nuarp tizen-coreutils/src/id.c tizen-coreutils-smack/src/id.c
    -g, --group     print only the effective group ID\n\
    -G, --groups    print all group IDs\n\
    -n, --name      print a name instead of a number, for -ugG\n\
-@@ -102,6 +109,8 @@ main (int argc, char **argv)
+@@ -102,6 +106,8 @@ main (int argc, char **argv)
  {
    int optc;
  
@@ -208,7 +208,7 @@ diff -Nuarp tizen-coreutils/src/id.c tizen-coreutils-smack/src/id.c
    /* If true, output the list of all group IDs. -G */
    bool just_group_list = false;
    /* If true, output only the group ID(s). -g */
-@@ -119,13 +128,16 @@ main (int argc, char **argv)
+@@ -119,13 +125,16 @@ main (int argc, char **argv)
  
    atexit (close_stdout);
  
@@ -226,7 +226,7 @@ diff -Nuarp tizen-coreutils/src/id.c tizen-coreutils-smack/src/id.c
  	case 'g':
  	  just_group = true;
  	  break;
-@@ -148,8 +160,8 @@ main (int argc, char **argv)
+@@ -148,8 +157,8 @@ main (int argc, char **argv)
  	}
      }
  
@@ -237,7 +237,7 @@ diff -Nuarp tizen-coreutils/src/id.c tizen-coreutils-smack/src/id.c
  
    if (just_user + just_group + just_group_list == 0 && (use_real | use_name))
      error (EXIT_FAILURE, 0,
-@@ -183,6 +195,8 @@ main (int argc, char **argv)
+@@ -183,6 +192,8 @@ main (int argc, char **argv)
      print_group (use_real ? rgid : egid);
    else if (just_group_list)
      print_group_list (argv[optind]);
@@ -246,7 +246,7 @@ diff -Nuarp tizen-coreutils/src/id.c tizen-coreutils-smack/src/id.c
    else
      print_full_info (argv[optind]);
    putchar ('\n');
-@@ -324,6 +338,18 @@ print_group_list (const char *username)
+@@ -324,6 +335,19 @@ print_group_list (const char *username)
  #endif /* HAVE_GETGROUPS */
  }
  
@@ -255,36 +255,47 @@ diff -Nuarp tizen-coreutils/src/id.c tizen-coreutils-smack/src/id.c
 +static void
 +print_context (void)
 +{
-+
-+  if (smack_of_proc(-1, context, sizeof (context)) < 1 || strlen(context) < 1)
++  char *context = NULL;
++  if (smack_new_label_from_self (&context) < 1)
 +    printf ("<secuirty context is unavailable>");
 +  else
 +    printf ("%s", context);
++  free(context);
 +}
 +
  /* Print all of the info about the user's user and group IDs. */
  
  static void
-@@ -385,4 +411,7 @@ print_full_info (const char *username)
+@@ -331,6 +355,7 @@ print_full_info (const char *username)
+ {
+   struct passwd *pwd;
+   struct group *grp;
++  char *context = NULL;
+ 
+   printf ("uid=%lu", (unsigned long int) ruid);
+   pwd = getpwuid (ruid);
+@@ -385,4 +410,8 @@ print_full_info (const char *username)
      free (groups);
    }
  #endif /* HAVE_GETGROUPS */
 +
-+  if (smack_of_proc(-1, context, sizeof (context)) > 0 && strlen(context) > 0)
++  if (smack_new_label_from_self (&context) > 0)
 +    printf (" context=\"%s\"", context);
++  free (context);
  }
 diff -Nuarp tizen-coreutils/src/install.c tizen-coreutils-smack/src/install.c
---- tizen-coreutils/src/install.c	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/install.c	2012-11-30 11:20:39.837516860 +0200
-@@ -39,6 +39,7 @@
- #include "stat-time.h"
- #include "utimens.h"
- #include "xstrtol.h"
-+#include "smack.h"
- 
- /* The official name of this program (e.g., no `g' prefix).  */
- #define PROGRAM_NAME "install"
-@@ -115,6 +116,9 @@ static mode_t dir_mode = DEFAULT_MODE;
+--- tizen-coreutils/src/install.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/install.c	2015-05-20 16:16:27.000000000 +0200
+@@ -20,6 +20,8 @@
+ #include <config.h>
+ #include <stdio.h>
+ #include <getopt.h>
++#include <linux/xattr.h>
++#include <sys/smack.h>
+ #include <sys/types.h>
+ #include <signal.h>
+ #include <pwd.h>
+@@ -115,6 +117,9 @@ static mode_t dir_mode = DEFAULT_MODE;
     or S_ISGID bits.  */
  static mode_t dir_mode_bits = CHMOD_MODE_BITS;
  
@@ -294,7 +305,7 @@ diff -Nuarp tizen-coreutils/src/install.c tizen-coreutils-smack/src/install.c
  /* If true, strip executable files after copying them. */
  static bool strip_files;
  
-@@ -124,6 +128,7 @@ static bool dir_arg;
+@@ -124,6 +129,7 @@ static bool dir_arg;
  static struct option const long_options[] =
  {
    {"backup", optional_argument, NULL, 'b'},
@@ -302,7 +313,7 @@ diff -Nuarp tizen-coreutils/src/install.c tizen-coreutils-smack/src/install.c
    {"directory", no_argument, NULL, 'd'},
    {"group", required_argument, NULL, 'g'},
    {"mode", required_argument, NULL, 'm'},
-@@ -155,6 +160,7 @@ cp_option_init (struct cp_options *x)
+@@ -155,6 +161,7 @@ cp_option_init (struct cp_options *x)
    x->preserve_links = false;
    x->preserve_mode = false;
    x->preserve_timestamps = false;
@@ -310,7 +321,7 @@ diff -Nuarp tizen-coreutils/src/install.c tizen-coreutils-smack/src/install.c
    x->require_preserve = false;
    x->recursive = false;
    x->sparse_mode = SPARSE_AUTO;
-@@ -243,7 +249,7 @@ main (int argc, char **argv)
+@@ -243,7 +250,7 @@ main (int argc, char **argv)
       we'll actually use backup_suffix_string.  */
    backup_suffix_string = getenv ("SIMPLE_BACKUP_SUFFIX");
  
@@ -319,7 +330,7 @@ diff -Nuarp tizen-coreutils/src/install.c tizen-coreutils-smack/src/install.c
  			      NULL)) != -1)
      {
        switch (optc)
-@@ -305,6 +311,9 @@ main (int argc, char **argv)
+@@ -305,6 +312,9 @@ main (int argc, char **argv)
  	case 'T':
  	  no_target_directory = true;
  	  break;
@@ -329,16 +340,16 @@ diff -Nuarp tizen-coreutils/src/install.c tizen-coreutils-smack/src/install.c
  	case_GETOPT_HELP_CHAR;
  	case_GETOPT_VERSION_CHAR (PROGRAM_NAME, AUTHORS);
  	default:
-@@ -520,6 +529,8 @@ change_attributes (char const *name)
+@@ -520,6 +530,8 @@ change_attributes (char const *name)
      error (0, errno, _("cannot change ownership of %s"), quote (name));
    else if (chmod (name, mode) != 0)
      error (0, errno, _("cannot change permissions of %s"), quote (name));
-+  else if (context && smack_to_file (name, context) < 0)
++  else if (context && smack_set_label_for_file (name, XATTR_NAME_SMACK, context) < 0)
 +   ; // error (0, errno, _("cannot change security context of %s"), quote (name));
    else
      return true;
  
-@@ -686,6 +697,7 @@ Mandatory arguments to long options are
+@@ -686,6 +698,7 @@ Mandatory arguments to long options are
    -t, --target-directory=DIRECTORY  copy all SOURCE arguments into DIRECTORY\n\
    -T, --no-target-directory  treat DEST as a normal file\n\
    -v, --verbose       print the name of each directory as it is created\n\
@@ -347,27 +358,28 @@ diff -Nuarp tizen-coreutils/src/install.c tizen-coreutils-smack/src/install.c
        fputs (HELP_OPTION_DESCRIPTION, stdout);
        fputs (VERSION_OPTION_DESCRIPTION, stdout);
 diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
---- tizen-coreutils/src/ls.c	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/ls.c	2012-11-30 11:20:39.841516860 +0200
-@@ -104,6 +104,7 @@
- #include "wcwidth.h"
- #include "xstrtol.h"
- #include "xreadlink.h"
-+#include "smack.h"
+--- tizen-coreutils/src/ls.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/ls.c	2015-05-20 16:16:27.000000000 +0200
+@@ -37,6 +37,8 @@
+    Greg Lee <lee@uhunix.uhcc.hawaii.edu>.  */
  
- #define PROGRAM_NAME (ls_mode == LS_LS ? "ls" \
- 		      : (ls_mode == LS_MULTI_COL \
-@@ -177,6 +178,9 @@ struct fileinfo
+ #include <config.h>
++#include <linux/xattr.h>
++#include <sys/smack.h>
+ #include <sys/types.h>
+ 
+ #if HAVE_TERMIOS_H
+@@ -177,6 +179,9 @@ struct fileinfo
      /* For long listings, true if the file has an access control list.  */
      bool have_acl;
  #endif
 +
 +    /* Security context */
-+    char context[SMACK_LABELLEN];
++    char *context;
    };
  
  #if USE_ACL
-@@ -339,6 +343,7 @@ static int nlink_width;
+@@ -339,6 +344,7 @@ static int nlink_width;
  static int owner_width;
  static int group_width;
  static int author_width;
@@ -375,7 +387,7 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
  static int major_device_number_width;
  static int minor_device_number_width;
  static int file_size_width;
-@@ -434,6 +439,10 @@ static bool print_owner = true;
+@@ -434,6 +440,10 @@ static bool print_owner = true;
  
  static bool print_author;
  
@@ -386,7 +398,7 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
  /* True means to display group information.  -G and -o turn this off.  */
  
  static bool print_group = true;
-@@ -1514,7 +1523,7 @@ decode_switches (int argc, char **argv)
+@@ -1514,7 +1524,7 @@ decode_switches (int argc, char **argv)
    }
  
    while ((c = getopt_long (argc, argv,
@@ -395,7 +407,7 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
  			   long_options, NULL)) != -1)
      {
        switch (c)
-@@ -1717,6 +1726,10 @@ decode_switches (int argc, char **argv)
+@@ -1717,6 +1727,10 @@ decode_switches (int argc, char **argv)
  	  sort_type_specified = true;
  	  break;
  
@@ -406,7 +418,15 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
  	case '1':
  	  /* -1 has no effect after -l.  */
  	  if (format != long_format)
-@@ -2574,6 +2587,7 @@ gobble_file (char const *name, enum file
+@@ -2516,6 +2530,7 @@ clear_files (void)
+       struct fileinfo *f = sorted_file[i];
+       free (f->name);
+       free (f->linkname);
++      free (f->context);
+     }
+ 
+   cwd_n_used = 0;
+@@ -2574,6 +2589,7 @@ gobble_file (char const *name, enum file
        /* Command line dereferences are already taken care of by the above
  	 assertion that the inode number is not yet known.  */
        || (print_inode && inode == NOT_AN_INODE_NUMBER)
@@ -414,32 +434,34 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
        || (format_needs_type
  	  && (type == unknown || command_line_arg
  	      /* --indicator-style=classify (aka -F)
-@@ -2605,6 +2619,7 @@ gobble_file (char const *name, enum file
+@@ -2605,6 +2621,8 @@ gobble_file (char const *name, enum file
        switch (dereference)
  	{
  	case DEREF_ALWAYS:
-+          err = smack_of_file_follow(absolute_name, f->context, SMACK_LABELLEN);
++          err = smack_new_label_from_path (absolute_name, XATTR_NAME_SMACK,
++                                           1, &(f->context));
  	  err = stat (absolute_name, &f->stat);
  	  break;
  
-@@ -2613,6 +2628,8 @@ gobble_file (char const *name, enum file
+@@ -2613,6 +2631,8 @@ gobble_file (char const *name, enum file
  	  if (command_line_arg)
  	    {
  	      bool need_lstat;
-+              err = smack_of_file_follow(absolute_name, f->context,
-+                                         SMACK_LABELLEN);
++              err = smack_new_label_from_path (absolute_name, XATTR_NAME_SMACK,
++                                               1, &(f->context));
  	      err = stat (absolute_name, &f->stat);
  
  	      if (dereference == DEREF_COMMAND_LINE_ARGUMENTS)
-@@ -2631,6 +2648,7 @@ gobble_file (char const *name, enum file
+@@ -2631,6 +2651,8 @@ gobble_file (char const *name, enum file
  	    }
  
  	default: /* DEREF_NEVER */
-+          err = smack_of_file(absolute_name, f->context, SMACK_LABELLEN);
++          err = smack_new_label_from_path (absolute_name, XATTR_NAME_SMACK,
++                                           0, &(f->context));
  	  err = lstat (absolute_name, &f->stat);
  	  break;
  	}
-@@ -2738,6 +2756,13 @@ gobble_file (char const *name, enum file
+@@ -2738,6 +2760,13 @@ gobble_file (char const *name, enum file
  	    author_width = len;
  	}
  
@@ -453,7 +475,7 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
        {
  	char buf[INT_BUFSIZE_BOUND (uintmax_t)];
  	int len = strlen (umaxtostr (f->stat.st_nlink, buf));
-@@ -3463,7 +3488,7 @@ print_long_format (const struct fileinfo
+@@ -3463,7 +3492,7 @@ print_long_format (const struct fileinfo
  
    DIRED_INDENT ();
  
@@ -462,7 +484,7 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
      {
        DIRED_FPUTS (buf, stdout, p - buf);
  
-@@ -3476,6 +3501,9 @@ print_long_format (const struct fileinfo
+@@ -3476,6 +3505,9 @@ print_long_format (const struct fileinfo
        if (print_author)
  	format_user (f->stat.st_author, author_width, f->stat_ok);
  
@@ -472,7 +494,7 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
        p = buf;
      }
  
-@@ -3812,6 +3840,9 @@ print_file_name_and_frills (const struct
+@@ -3812,6 +3844,9 @@ print_file_name_and_frills (const struct
  	    human_readable (ST_NBLOCKS (f->stat), buf, human_output_opts,
  			    ST_NBLOCKSIZE, output_block_size));
  
@@ -482,7 +504,7 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
    print_name_with_quoting (f->name, FILE_OR_LINK_MODE (f), f->linkok,
  			   f->stat_ok, f->filetype, NULL);
  
-@@ -3975,6 +4006,9 @@ length_of_file_name_and_frills (const st
+@@ -3975,6 +4010,9 @@ length_of_file_name_and_frills (const st
  					  output_block_size))
  		: block_size_width);
  
@@ -492,7 +514,7 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
    quote_name (NULL, f->name, filename_quoting_options, &name_width);
    len += name_width;
  
-@@ -4403,6 +4437,7 @@ Mandatory arguments to long options are
+@@ -4403,6 +4441,7 @@ Mandatory arguments to long options are
    -w, --width=COLS           assume screen width instead of current value\n\
    -x                         list entries by lines instead of by columns\n\
    -X                         sort alphabetically by entry extension\n\
@@ -500,18 +522,41 @@ diff -Nuarp tizen-coreutils/src/ls.c tizen-coreutils-smack/src/ls.c
    -1                         list one file per line\n\
  "), stdout);
        fputs (HELP_OPTION_DESCRIPTION, stdout);
-diff -Nuarp tizen-coreutils/src/mkdir.c tizen-coreutils-smack/src/mkdir.c
---- tizen-coreutils/src/mkdir.c	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/mkdir.c	2012-11-30 11:20:39.841516860 +0200
-@@ -29,6 +29,7 @@
- #include "modechange.h"
- #include "quote.h"
- #include "savewd.h"
-+#include "smack.h"
+diff -Nuarp tizen-coreutils/src/Makefile.am tizen-coreutils-smack/src/Makefile.am
+--- tizen-coreutils/src/Makefile.am	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/Makefile.am	2015-05-20 16:16:27.000000000 +0200
+@@ -111,6 +111,18 @@ cp_LDADD += $(LIB_ACL)
+ mv_LDADD += $(LIB_ACL)
+ ginstall_LDADD += $(LIB_ACL)
  
- /* The official name of this program (e.g., no `g' prefix).  */
- #define PROGRAM_NAME "mkdir"
-@@ -40,6 +41,7 @@ char *program_name;
++ls_LDADD += $(LIB_SMACK)
++dir_LDADD += $(LIB_SMACK)
++vdir_LDADD += $(LIB_SMACK)
++cp_LDADD += $(LIB_SMACK)
++mv_LDADD += $(LIB_SMACK)
++ginstall_LDADD += $(LIB_SMACK)
++id_LDADD = $(LDADD) $(LIB_SMACK)
++mkdir_LDADD = $(LDADD) $(LIB_SMACK)
++mkfifo_LDADD = $(LDADD) $(LIB_SMACK)
++mknod_LDADD = $(LDADD) $(LIB_SMACK)
++stat_LDADD = $(LDADD) $(LIB_SMACK)
++
+ $(PROGRAMS): ../lib/libcoreutils.a
+ 
+ SUFFIXES = .sh
+diff -Nuarp tizen-coreutils/src/mkdir.c tizen-coreutils-smack/src/mkdir.c
+--- tizen-coreutils/src/mkdir.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/mkdir.c	2015-05-20 16:16:27.000000000 +0200
+@@ -20,6 +20,8 @@
+ #include <config.h>
+ #include <stdio.h>
+ #include <getopt.h>
++#include <linux/xattr.h>
++#include <sys/smack.h>
+ #include <sys/types.h>
+ 
+ #include "system.h"
+@@ -40,6 +42,7 @@ char *program_name;
  
  static struct option const longopts[] =
  {
@@ -519,7 +564,7 @@ diff -Nuarp tizen-coreutils/src/mkdir.c tizen-coreutils-smack/src/mkdir.c
    {"mode", required_argument, NULL, 'm'},
    {"parents", no_argument, NULL, 'p'},
    {"verbose", no_argument, NULL, 'v'},
-@@ -65,9 +67,10 @@ Create the DIRECTORY(ies), if they do no
+@@ -65,9 +68,10 @@ Create the DIRECTORY(ies), if they do no
  Mandatory arguments to long options are mandatory for short options too.\n\
  "), stdout);
        fputs (_("\
@@ -533,7 +578,7 @@ diff -Nuarp tizen-coreutils/src/mkdir.c tizen-coreutils-smack/src/mkdir.c
  "), stdout);
        fputs (HELP_OPTION_DESCRIPTION, stdout);
        fputs (VERSION_OPTION_DESCRIPTION, stdout);
-@@ -92,6 +95,9 @@ struct mkdir_options
+@@ -92,6 +96,9 @@ struct mkdir_options
    /* File mode bits affected by MODE.  */
    mode_t mode_bits;
  
@@ -543,7 +588,7 @@ diff -Nuarp tizen-coreutils/src/mkdir.c tizen-coreutils-smack/src/mkdir.c
    /* If not null, format to use when reporting newly made directories.  */
    char const *created_directory_format;
  };
-@@ -101,6 +107,17 @@ static void
+@@ -101,6 +108,17 @@ static void
  announce_mkdir (char const *dir, void *options)
  {
    struct mkdir_options const *o = options;
@@ -552,16 +597,16 @@ diff -Nuarp tizen-coreutils/src/mkdir.c tizen-coreutils-smack/src/mkdir.c
 +  char *sep = strrchr(dir, '/');
 +  int res = 0;
 +  if ((sep != NULL) && (strlen(sep) != strlen(dir)))
-+    res = smack_to_file (sep + 1, o->context);
++    res = smack_set_label_for_file (sep + 1, XATTR_NAME_SMACK, o->context);
 +  else 
-+    res = smack_to_file (dir, o->context);
++    res = smack_set_label_for_file (dir, XATTR_NAME_SMACK, o->context);
 +  if (res < 0)
 +    ; // error (0, errno, _("setting directory context failed"));
 +  }
    if (o->created_directory_format)
      error (0, 0, o->created_directory_format, quote (dir));
  }
-@@ -144,6 +155,7 @@ main (int argc, char **argv)
+@@ -144,6 +162,7 @@ main (int argc, char **argv)
    options.make_ancestor_function = NULL;
    options.mode = S_IRWXUGO;
    options.mode_bits = 0;
@@ -569,7 +614,7 @@ diff -Nuarp tizen-coreutils/src/mkdir.c tizen-coreutils-smack/src/mkdir.c
    options.created_directory_format = NULL;
  
    initialize_main (&argc, &argv);
-@@ -154,10 +166,13 @@ main (int argc, char **argv)
+@@ -154,10 +173,13 @@ main (int argc, char **argv)
  
    atexit (close_stdout);
  
@@ -585,17 +630,18 @@ diff -Nuarp tizen-coreutils/src/mkdir.c tizen-coreutils-smack/src/mkdir.c
  	  options.make_ancestor_function = make_ancestor;
  	  break;
 diff -Nuarp tizen-coreutils/src/mkfifo.c tizen-coreutils-smack/src/mkfifo.c
---- tizen-coreutils/src/mkfifo.c	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/mkfifo.c	2012-11-30 11:20:39.841516860 +0200
-@@ -26,6 +26,7 @@
- #include "error.h"
- #include "modechange.h"
- #include "quote.h"
-+#include "smack.h"
+--- tizen-coreutils/src/mkfifo.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/mkfifo.c	2015-05-20 16:16:27.000000000 +0200
+@@ -20,6 +20,8 @@
+ #include <config.h>
+ #include <stdio.h>
+ #include <getopt.h>
++#include <linux/xattr.h>
++#include <sys/smack.h>
+ #include <sys/types.h>
  
- /* The official name of this program (e.g., no `g' prefix).  */
- #define PROGRAM_NAME "mkfifo"
-@@ -37,6 +38,7 @@ char *program_name;
+ #include "system.h"
+@@ -37,6 +39,7 @@ char *program_name;
  
  static struct option const longopts[] =
  {
@@ -603,7 +649,7 @@ diff -Nuarp tizen-coreutils/src/mkfifo.c tizen-coreutils-smack/src/mkfifo.c
    {"mode", required_argument, NULL, 'm'},
    {GETOPT_HELP_OPTION_DECL},
    {GETOPT_VERSION_OPTION_DECL},
-@@ -60,7 +62,10 @@ Create named pipes (FIFOs) with the give
+@@ -60,7 +63,10 @@ Create named pipes (FIFOs) with the give
  Mandatory arguments to long options are mandatory for short options too.\n\
  "), stdout);
        fputs (_("\
@@ -615,7 +661,7 @@ diff -Nuarp tizen-coreutils/src/mkfifo.c tizen-coreutils-smack/src/mkfifo.c
  "), stdout);
        fputs (HELP_OPTION_DESCRIPTION, stdout);
        fputs (VERSION_OPTION_DESCRIPTION, stdout);
-@@ -73,6 +78,7 @@ int
+@@ -73,6 +79,7 @@ int
  main (int argc, char **argv)
  {
    mode_t newmode;
@@ -623,7 +669,7 @@ diff -Nuarp tizen-coreutils/src/mkfifo.c tizen-coreutils-smack/src/mkfifo.c
    char const *specified_mode = NULL;
    int exit_status = EXIT_SUCCESS;
    int optc;
-@@ -85,10 +91,13 @@ main (int argc, char **argv)
+@@ -85,10 +92,13 @@ main (int argc, char **argv)
  
    atexit (close_stdout);
  
@@ -638,7 +684,7 @@ diff -Nuarp tizen-coreutils/src/mkfifo.c tizen-coreutils-smack/src/mkfifo.c
  	case 'm':
  	  specified_mode = optarg;
  	  break;
-@@ -119,11 +128,17 @@ main (int argc, char **argv)
+@@ -119,11 +129,18 @@ main (int argc, char **argv)
      }
  
    for (; optind < argc; ++optind)
@@ -654,7 +700,8 @@ diff -Nuarp tizen-coreutils/src/mkfifo.c tizen-coreutils-smack/src/mkfifo.c
 +	  exit_status = EXIT_FAILURE;
 +        }
 +      if (specified_context &&
-+          smack_to_file(argv[optind], specified_context) < 0)
++          smack_set_label_for_path (argv[optind], XATTR_NAME_SMACK, 0,
++                                    specified_context) < 0)
 +       ;// error (0, errno, _("context assignment of %s to %s failed"),
 +       //        argv[optind], quote (specified_context));
 +    }
@@ -662,17 +709,18 @@ diff -Nuarp tizen-coreutils/src/mkfifo.c tizen-coreutils-smack/src/mkfifo.c
    exit (exit_status);
  }
 diff -Nuarp tizen-coreutils/src/mknod.c tizen-coreutils-smack/src/mknod.c
---- tizen-coreutils/src/mknod.c	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/mknod.c	2012-11-30 11:20:39.841516860 +0200
-@@ -27,6 +27,7 @@
- #include "modechange.h"
- #include "quote.h"
- #include "xstrtol.h"
-+#include "smack.h"
+--- tizen-coreutils/src/mknod.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/mknod.c	2015-05-20 16:16:27.000000000 +0200
+@@ -20,6 +20,8 @@
+ #include <config.h>
+ #include <stdio.h>
+ #include <getopt.h>
++#include <linux/xattr.h>
++#include <sys/smack.h>
+ #include <sys/types.h>
  
- /* The official name of this program (e.g., no `g' prefix).  */
- #define PROGRAM_NAME "mknod"
-@@ -38,6 +39,7 @@ char *program_name;
+ #include "system.h"
+@@ -38,6 +40,7 @@ char *program_name;
  
  static struct option const longopts[] =
  {
@@ -680,7 +728,7 @@ diff -Nuarp tizen-coreutils/src/mknod.c tizen-coreutils-smack/src/mknod.c
    {"mode", required_argument, NULL, 'm'},
    {GETOPT_HELP_OPTION_DECL},
    {GETOPT_VERSION_OPTION_DECL},
-@@ -62,7 +64,10 @@ Create the special file NAME of the give
+@@ -62,7 +65,10 @@ Create the special file NAME of the give
  Mandatory arguments to long options are mandatory for short options too.\n\
  "), stdout);
        fputs (_("\
@@ -692,7 +740,7 @@ diff -Nuarp tizen-coreutils/src/mknod.c tizen-coreutils-smack/src/mknod.c
  "), stdout);
        fputs (HELP_OPTION_DESCRIPTION, stdout);
        fputs (VERSION_OPTION_DESCRIPTION, stdout);
-@@ -88,6 +93,7 @@ int
+@@ -88,6 +94,7 @@ int
  main (int argc, char **argv)
  {
    mode_t newmode;
@@ -700,7 +748,7 @@ diff -Nuarp tizen-coreutils/src/mknod.c tizen-coreutils-smack/src/mknod.c
    char const *specified_mode = NULL;
    int optc;
    int expected_operands;
-@@ -101,10 +107,13 @@ main (int argc, char **argv)
+@@ -101,10 +108,13 @@ main (int argc, char **argv)
  
    atexit (close_stdout);
  
@@ -715,24 +763,26 @@ diff -Nuarp tizen-coreutils/src/mknod.c tizen-coreutils-smack/src/mknod.c
  	case 'm':
  	  specified_mode = optarg;
  	  break;
-@@ -217,5 +226,9 @@ main (int argc, char **argv)
+@@ -217,5 +227,11 @@ main (int argc, char **argv)
        usage (EXIT_FAILURE);
      }
  
-+  if (specified_context && smack_to_file (argv[optind], specified_context) < 0)
++  if (specified_context &&
++      smack_set_label_for_file (argv[optind], XATTR_NAME_SMACK,
++                                specified_context) < 0)
 +    ; //error (0, errno, _("context assignment to %s failed"),
 +    //       quote (specified_context));
 +
    exit (EXIT_SUCCESS);
  }
 diff -Nuarp tizen-coreutils/src/mv.c tizen-coreutils-smack/src/mv.c
---- tizen-coreutils/src/mv.c	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/mv.c	2012-11-30 11:20:39.841516860 +0200
+--- tizen-coreutils/src/mv.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/mv.c	2015-05-20 16:16:27.000000000 +0200
 @@ -32,6 +32,7 @@
  #include "filenamecat.h"
  #include "quote.h"
  #include "remove.h"
-+#include "smack.h"
++#include <sys/smack.h>
  
  /* The official name of this program (e.g., no `g' prefix).  */
  #define PROGRAM_NAME "mv"
@@ -744,156 +794,19 @@ diff -Nuarp tizen-coreutils/src/mv.c tizen-coreutils-smack/src/mv.c
    x->require_preserve = false;  /* FIXME: maybe make this an option */
    x->recursive = true;
    x->sparse_mode = SPARSE_AUTO;  /* FIXME: maybe make this an option */
-diff -Nuarp tizen-coreutils/src/smack.h tizen-coreutils-smack/src/smack.h
---- tizen-coreutils/src/smack.h	1970-01-01 02:00:00.000000000 +0200
-+++ tizen-coreutils-smack/src/smack.h	2012-11-30 11:20:39.841516860 +0200
-@@ -0,0 +1,134 @@
-+/* smack.h - Simplified Mandatory Access Control Kernel
-+
-+   Copyright (C) 2010 Free Software Foundation, Inc.
-+
-+   This program is free software: you can redistribute it and/or modify
-+   it under the terms of the GNU General Public License as published by
-+   the Free Software Foundation; either version 3 of the License, or
-+   (at your option) any later version.
-+
-+   This program is distributed in the hope that it will be useful,
-+   but WITHOUT ANY WARRANTY; without even the implied warranty of
-+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-+   GNU General Public License for more details.
-+
-+   You should have received a copy of the GNU General Public License
-+   along with this program.  If not, see <http://www.gnu.org/licenses/>.
-+
-+   Written by Casey Schaufler.  */
-+
-+#include <sys/types.h>
-+#include <sys/stat.h>
-+#include <sys/xattr.h>
-+#include <unistd.h>
-+
-+#define SMACK_PATHTEXTSIZE 80
-+#define SMACK_LABELLEN 256
-+#define SMACK_PROC_FMT "/proc/%s/attr/current"
-+#define SMACK_CHECK_PATH "/smack/load"
-+#define SMACK_ATTRNAME "security.SMACK64"
-+
-+static inline int
-+smack_enabled(void)
-+{
-+  int i;
-+  struct stat buf;
-+
-+  i = stat(SMACK_CHECK_PATH, &buf);
-+
-+  if (i < 0)
-+    return 0;
-+
-+  return 1;
-+}
-+
-+static inline int
-+smack_of_file(const char *path, char *result, int rlen)
-+{
-+  int i;
-+
-+  i = lgetxattr(path, SMACK_ATTRNAME, result, rlen);
-+  if (i < 0)
-+    return i;
-+
-+  if (i < rlen)
-+    result[i] = '\0';
-+
-+  return i;
-+}
-+
-+static inline int
-+smack_of_file_follow(const char *path, char *result, int rlen)
-+{
-+  int i;
-+
-+  i = getxattr(path, SMACK_ATTRNAME, result, rlen);
-+  if (i < 0)
-+    return i;
-+
-+  if (i < rlen)
-+    result[i] = '\0';
-+
-+  return i;
-+}
-+
-+static inline int
-+smack_of_fd(int fd, char *result, int rlen)
-+{
-+  int i;
-+
-+  i = fgetxattr(fd, SMACK_ATTRNAME, result, rlen);
-+  if (i < 0)
-+    return i;
-+
-+  if (i < rlen)
-+    result[i] = '\0';
-+
-+  return i;
-+}
-+
-+static inline int
-+smack_to_fd(int fd, char *smack)
-+{
-+  return fsetxattr(fd, SMACK_ATTRNAME, smack, strlen(smack), 0);
-+}
-+
-+static inline int
-+smack_to_file(const char *path, char *smack)
-+{
-+  return lsetxattr(path, SMACK_ATTRNAME, smack, strlen(smack), 0);
-+}
-+
-+static inline int
-+smack_of_proc(pid_t pid, char *result, int rlen)
-+{
-+  int fd;
-+  int red;
-+  char *cp = "self";
-+  char pidtext[SMACK_PATHTEXTSIZE];
-+  char path[SMACK_PATHTEXTSIZE];
-+
-+  if (pid > 0)
-+    {
-+      sprintf(pidtext, "%d", pid);
-+      cp = pidtext;
-+    }
-+
-+  if (strlen(cp) + strlen(SMACK_PROC_FMT) >= SMACK_PATHTEXTSIZE)
-+    return -1;
-+
-+  sprintf(path, SMACK_PROC_FMT, cp);
-+  fd = open(path, O_RDONLY);
-+  if (fd < 0)
-+    return fd;
-+
-+  red = read(fd, result, rlen);
-+  close(fd);
-+
-+  if (red >= 0 && red < rlen)
-+    result[red] = '\0';
-+  if ((cp = index (result, '\n')) != NULL)
-+    *cp = '\0';
-+
-+  return strlen (result);
-+}
 diff -Nuarp tizen-coreutils/src/stat.c tizen-coreutils-smack/src/stat.c
---- tizen-coreutils/src/stat.c	2012-11-30 10:11:38.000000000 +0200
-+++ tizen-coreutils-smack/src/stat.c	2012-11-30 11:20:39.845516860 +0200
-@@ -68,6 +68,7 @@
- #include "stat-time.h"
- #include "strftime.h"
- #include "xreadlink.h"
-+#include "smack.h"
+--- tizen-coreutils/src/stat.c	2015-05-20 16:17:03.000000000 +0200
++++ tizen-coreutils-smack/src/stat.c	2015-05-20 16:16:27.000000000 +0200
+@@ -31,6 +31,8 @@
  
- #define alignof(type) offsetof (struct { char c; type x; }, x)
- 
-@@ -270,6 +271,8 @@ human_fstype (STRUCT_STATVFS const *stat
+ #include <stddef.h>
+ #include <stdio.h>
++#include <linux/xattr.h>
++#include <sys/smack.h>
+ #include <sys/types.h>
+ #include <pwd.h>
+ #include <grp.h>
+@@ -270,6 +272,8 @@ human_fstype (STRUCT_STATVFS const *stat
        return "squashfs";
      case S_MAGIC_SYSFS: /* 0x62656572 */
        return "sysfs";
@@ -902,22 +815,23 @@ diff -Nuarp tizen-coreutils/src/stat.c tizen-coreutils-smack/src/stat.c
  # elif __GNU__
      case FSTYPE_UFS:
        return "ufs";
-@@ -595,6 +598,14 @@ print_stat (char *pformat, size_t prefix
+@@ -595,6 +599,15 @@ print_stat (char *pformat, size_t prefix
        else
  	out_uint (pformat, prefix_len, statbuf->st_ctime);
        break;
 +    case 'C':
 +      {
-+        char context[SMACK_LABELLEN];
++        char *context = NULL;
 +
-+        if (smack_of_file(filename, context, SMACK_LABELLEN) > 0)
++        if (smack_new_label_from_path (filename, XATTR_NAME_SMACK, 0, &context) > 0)
 +          out_string(pformat, prefix_len, context);
++        free (context);
 +      }
 +      break;
      default:
        fputc ('?', stdout);
        break;
-@@ -855,6 +866,7 @@ The valid format sequences for files (wi
+@@ -855,6 +868,7 @@ The valid format sequences for files (wi
    %B   The size in bytes of each block reported by %b\n\
  "), stdout);
        fputs (_("\

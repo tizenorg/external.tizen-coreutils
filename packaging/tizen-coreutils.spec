@@ -18,6 +18,7 @@ Patch1001:	mktemp-1.5-build.patch
 BuildRequires:	autoconf >= 2.58
 BuildRequires:	automake >= 1.10
 BuildRequires:	gettext findutils
+BuildRequires:	smack-devel >= 1.1.0
 
 Provides:	fileutils sh-utils stat textutils mktemp
 Provides:	coreutils
