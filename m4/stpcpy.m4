@@ -7,7 +7,7 @@ dnl with or without modifications, as long as this notice is preserved.
 AC_DEFUN([gl_FUNC_STPCPY],
 [
   dnl Persuade glibc <string.h> to declare stpcpy().
-  AC_REQUIRE([AC_GNU_SOURCE])
+  dnl AC_REQUIRE([AC_GNU_SOURCE])
 
   AC_REQUIRE([gl_HEADER_STRING_H_DEFAULTS])
   AC_REPLACE_FUNCS(stpcpy)

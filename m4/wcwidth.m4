@@ -7,7 +7,7 @@ dnl with or without modifications, as long as this notice is preserved.
 AC_DEFUN([gl_FUNC_WCWIDTH],
 [
   dnl Persuade glibc <wchar.h> to declare wcwidth().
-  AC_REQUIRE([AC_GNU_SOURCE])
+  dnl AC_REQUIRE([AC_GNU_SOURCE])
 
   AC_REQUIRE([AC_C_INLINE])
   AC_REQUIRE([gt_TYPE_WCHAR_T])

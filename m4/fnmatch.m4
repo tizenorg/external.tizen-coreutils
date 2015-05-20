@@ -110,7 +110,7 @@ AC_DEFUN([gl_FUNC_FNMATCH_POSIX],
 AC_DEFUN([gl_FUNC_FNMATCH_GNU],
 [
   dnl Persuade glibc <fnmatch.h> to declare FNM_CASEFOLD etc.
-  AC_REQUIRE([AC_GNU_SOURCE])
+  dnl AC_REQUIRE([AC_GNU_SOURCE])
 
   FNMATCH_H=
   _AC_FUNC_FNMATCH_IF([GNU], [ac_cv_func_fnmatch_gnu],

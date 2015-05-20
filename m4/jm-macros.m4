@@ -145,7 +145,7 @@ AC_DEFUN([gl_CHECK_ALL_TYPES],
   dnl This test must precede tests of compiler characteristics like
   dnl that for the inline keyword, since it may change the degree to
   dnl which the compiler supports such features.
-  AC_REQUIRE([AM_C_PROTOTYPES])
+  dnl AC_REQUIRE([AM_C_PROTOTYPES])
 
   dnl Checks for typedefs, structures, and compiler characteristics.
   AC_REQUIRE([AC_C_BIGENDIAN])

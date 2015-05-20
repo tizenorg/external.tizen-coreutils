@@ -12,7 +12,7 @@ AC_DEFUN([gl_FUNC_GETDELIM],
 [
 
   dnl Persuade glibc <stdio.h> to declare getdelim().
-  AC_REQUIRE([AC_GNU_SOURCE])
+  dnl AC_REQUIRE([AC_GNU_SOURCE])
 
   AC_REPLACE_FUNCS(getdelim)
   AC_CHECK_DECLS_ONCE(getdelim)

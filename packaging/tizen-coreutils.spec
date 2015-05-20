@@ -40,6 +40,7 @@ patch -p1 < %{PATCH1001}
 make
 popd
 
+autoreconf
 %configure
 make
 

@@ -16,7 +16,7 @@ dnl to do with the function we need.
 AC_DEFUN([gl_FUNC_GETLINE],
 [
   dnl Persuade glibc <stdio.h> to declare getline().
-  AC_REQUIRE([AC_GNU_SOURCE])
+  dnl AC_REQUIRE([AC_GNU_SOURCE])
 
   AC_CHECK_DECLS([getline])
 
