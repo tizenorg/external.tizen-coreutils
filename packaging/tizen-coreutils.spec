@@ -1,23 +1,28 @@
 %define _unpackaged_files_terminate_build 0
 
 Summary: 	The GNU core utilities: a set of tools commonly used in shell scripts
-
 Name:		tizen-coreutils
 Version:	6.9
-Release:	9
-License:	GPLv2+
+Release:	13
+License:	GPL-2.0+
 Group:		System Environment/Base
 Url:		http://www.gnu.org/software/coreutils/
+
 Source0:	ftp://ftp.gnu.org/gnu/%{name}/coreutils-%{version}.tar.bz2
 Source1:	mktemp-1.5.tar.gz
-Patch1:		coreutils-futimens.patch
+Source1001:	%{name}.manifest
 
+Patch1:		coreutils-futimens.patch
+Patch2:		coreutils-6.9-smack.patch
 Patch1001:	mktemp-1.5-build.patch
+
 BuildRequires:	autoconf >= 2.58
 BuildRequires:	automake >= 1.10
 BuildRequires:	gettext findutils
 
 Provides:	fileutils sh-utils stat textutils mktemp
+Provides:	coreutils
+Obsoletes:	coreutils
 
 %description
 These are the GNU core utilities.  This package is the combination of
@@ -26,8 +31,10 @@ the old GNU fileutils, sh-utils, and textutils packages.
 %prep
 %setup -q -b 1 -n coreutils-%{version}
 %patch1 -p1 -b .futimens
+%patch2 -p1 -b .smack
 
 %build
+cp %{SOURCE1001} .
 pushd ../mktemp-1.5
 patch -p1 < %{PATCH1001}
 %configure
@@ -71,14 +78,26 @@ find %{buildroot}%{_datadir}/locale -type l | \
    rm -f "$link"
    ln "$(dirname "$link")/$target" "$link"
  done)
- 
+
+mkdir -p $RPM_BUILD_ROOT%{_datadir}/license
+for keyword in LICENSE COPYING COPYRIGHT;
+do
+	for file in `find %{_builddir} -name $keyword`;
+	do
+		cat $file >> $RPM_BUILD_ROOT%{_datadir}/license/%{name};
+		echo "";
+	done;
+done
+
 %clean
 rm -rf $RPM_BUILD_ROOT
 
 %docs_package
 
 %files
+%manifest %{name}.manifest
 %doc COPYING
+%{_datadir}/license/%{name}
 /bin/cat
 /bin/chgrp
 /bin/chmod
@@ -116,6 +135,8 @@ rm -rf $RPM_BUILD_ROOT
 %{_bindir}/nice
 %{_bindir}/od
 %{_bindir}/printenv
+%{_bindir}/printf
+%{_bindir}/readlink
 %{_bindir}/seq
 %{_bindir}/sort
 %{_bindir}/stat
