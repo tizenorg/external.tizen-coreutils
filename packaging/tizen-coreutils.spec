@@ -1,21 +1,21 @@
 %define _unpackaged_files_terminate_build 0
 
 Summary: 	The GNU core utilities: a set of tools commonly used in shell scripts
+
 Name:		tizen-coreutils
 Version:	6.9
-Release:	13
+Release:	14
 License:	GPL-2.0+
 Group:		System Environment/Base
 Url:		http://www.gnu.org/software/coreutils/
-
 Source0:	ftp://ftp.gnu.org/gnu/%{name}/coreutils-%{version}.tar.bz2
 Source1:	mktemp-1.5.tar.gz
 Source1001:	%{name}.manifest
-
 Patch1:		coreutils-futimens.patch
 Patch2:		coreutils-6.9-smack.patch
-Patch1001:	mktemp-1.5-build.patch
+Patch3:		coreutils-6.9-smack-fix.patch
 
+Patch1001:	mktemp-1.5-build.patch
 BuildRequires:	autoconf >= 2.58
 BuildRequires:	automake >= 1.10
 BuildRequires:	gettext findutils
@@ -32,9 +32,14 @@ the old GNU fileutils, sh-utils, and textutils packages.
 %setup -q -b 1 -n coreutils-%{version}
 %patch1 -p1 -b .futimens
 %patch2 -p1 -b .smack
+%patch3 -p1 -b .smack-fix
 
 %build
 cp %{SOURCE1001} .
+
+export CFLAGS=" -fpie"
+export LDFLAGS=" -pie"
+
 pushd ../mktemp-1.5
 patch -p1 < %{PATCH1001}
 %configure
